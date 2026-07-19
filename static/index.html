@@ -24,7 +24,11 @@
                 <h1>VisionTracker <span>AI</span></h1>
             </div>
             <div class="header-status">
-                <span class="status-label">System Status:</span>
+                <span class="status-label"><i class="fa-solid fa-users"></i> Viewers:</span>
+                <span id="active-viewers" class="status-badge connected" style="margin-right: 15px;">
+                    1
+                </span>
+                <span class="status-label">System:</span>
                 <span id="connection-status" class="status-badge disconnected">
                     <span class="status-dot"></span> Disconnected
                 </span>
@@ -49,6 +53,17 @@
                                 <option value="yolov8n.pt">YOLOv8 Nano (Fastest)</option>
                                 <option value="yolov8s.pt">YOLOv8 Small (Balanced)</option>
                                 <option value="yolov8m.pt">YOLOv8 Medium (Accurate)</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down select-arrow"></i>
+                        </div>
+                    </div>
+
+                    <!-- Dataset Selection -->
+                    <div class="form-group">
+                        <label for="dataset-select">Active Dataset</label>
+                        <div class="select-wrapper">
+                            <select id="dataset-select">
+                                <option value="video.mp4">Default (video.mp4)</option>
                             </select>
                             <i class="fa-solid fa-chevron-down select-arrow"></i>
                         </div>
@@ -130,6 +145,19 @@
                             </label>
                         </div>
                     </div>
+
+                    <!-- System Monitoring -->
+                    <div class="form-group system-monitor">
+                        <label>Server Resource usage</label>
+                        <div class="system-stat">
+                            <div class="stat-lbl"><span>CPU Load</span><span id="cpu-val">0%</span></div>
+                            <div class="progress-bar-container"><div id="cpu-bar" class="progress-bar" style="width: 0%"></div></div>
+                        </div>
+                        <div class="system-stat">
+                            <div class="stat-lbl"><span>RAM Usage</span><span id="ram-val">0%</span></div>
+                            <div class="progress-bar-container"><div id="ram-bar" class="progress-bar" style="width: 0%"></div></div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -179,9 +207,14 @@
                         </div>
                     </div>
 
-                    <!-- Chart Container -->
-                    <div class="chart-container">
-                        <canvas id="analytics-chart"></canvas>
+                    <!-- Chart Containers -->
+                    <div class="charts-wrapper" style="display: flex; flex-direction: column; gap: 15px;">
+                        <div class="chart-container" style="height: 160px; position: relative;">
+                            <canvas id="analytics-chart"></canvas>
+                        </div>
+                        <div class="chart-container" style="height: 160px; position: relative;">
+                            <canvas id="flow-chart"></canvas>
+                        </div>
                     </div>
 
                     <!-- Event log section -->

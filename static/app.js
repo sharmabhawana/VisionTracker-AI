@@ -1,7 +1,15 @@
 // Global State
 let wsConnection = null;
 let chart = null;
+let flowChart = null;
 let isPlaying = false;
+
+// Generate or retrieve independent User Session ID
+let sessionId = sessionStorage.getItem('tracker_session_id');
+if (!sessionId) {
+    sessionId = 'sess_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36);
+    sessionStorage.setItem('tracker_session_id', sessionId);
+}
 
 // DOM Elements
 const connectionStatus = document.getElementById('connection-status');
@@ -12,6 +20,7 @@ const btnPause = document.getElementById('btn-pause');
 const btnReset = document.getElementById('btn-reset');
 
 const modelSelect = document.getElementById('model-select');
+const datasetSelect = document.getElementById('dataset-select');
 const confSlider = document.getElementById('conf-slider');
 const confVal = document.getElementById('conf-val');
 const lineSlider = document.getElementById('line-slider');
@@ -40,12 +49,14 @@ const eventLog = document.getElementById('event-log');
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
     initChart();
+    initFlowChart();
+    loadDatasets();
     connectWebSocket();
     setupEventListeners();
     syncConfig();
 });
 
-// Setup Chart.js
+// Setup Chart 1: Bar Chart (Class crossings count)
 function initChart() {
     const ctx = document.getElementById('analytics-chart').getContext('2d');
     chart = new Chart(ctx, {
@@ -60,7 +71,7 @@ function initChart() {
                     'rgba(139, 92, 246, 0.6)',  // Purple
                     'rgba(16, 185, 129, 0.6)',  // Green
                     'rgba(245, 158, 11, 0.6)',  // Orange
-                    'rgba(59, 130, 246, 0.6)',   // Blue
+                    'rgba(59, 130, 246, 0.6)',  // Blue
                     'rgba(239, 68, 68, 0.6)'    // Red
                 ],
                 borderColor: [
@@ -79,39 +90,102 @@ function initChart() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false
-                }
+                legend: { display: false }
             },
             scales: {
                 y: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.05)'
-                    },
-                    ticks: {
-                        color: '#9ca3af',
-                        font: { family: 'Outfit' }
-                    }
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#9ca3af', font: { family: 'Outfit', size: 9 } }
                 },
                 x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        color: '#9ca3af',
-                        font: { family: 'Outfit' }
-                    }
+                    grid: { display: false },
+                    ticks: { color: '#9ca3af', font: { family: 'Outfit', size: 9 } }
                 }
             }
         }
     });
 }
 
-// WebSocket Connection
+// Setup Chart 2: Line Chart (Flow over time)
+function initFlowChart() {
+    const ctx = document.getElementById('flow-chart').getContext('2d');
+    flowChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Active Detections',
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 1
+                },
+                {
+                    label: 'Line Crossings',
+                    data: [],
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'rgba(6, 182, 212, 0.05)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#9ca3af', font: { family: 'Outfit', size: 10 } }
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#9ca3af', font: { family: 'Outfit', size: 9 } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#9ca3af', font: { family: 'Outfit', size: 8 } }
+                }
+            }
+        }
+    });
+}
+
+// Fetch list of available datasets from server
+function loadDatasets() {
+    fetch(`/api/datasets?session_id=${sessionId}`)
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success' && data.datasets) {
+            datasetSelect.innerHTML = '';
+            data.datasets.forEach(dataset => {
+                const opt = document.createElement('option');
+                opt.value = dataset;
+                opt.innerText = dataset;
+                // Set default video selection
+                if (dataset === 'video.mp4') {
+                    opt.selected = true;
+                }
+                datasetSelect.appendChild(opt);
+            });
+            syncConfig();
+        }
+    })
+    .catch(err => console.error('Error fetching datasets:', err));
+}
+
+// WebSocket Connection with Session ID
 function connectWebSocket() {
     const loc = window.location;
     let wsUri = loc.protocol === "https:" ? "wss:" : "ws:";
-    wsUri += `//${loc.host}/ws`;
+    wsUri += `//${loc.host}/ws?session_id=${sessionId}`;
 
     wsConnection = new WebSocket(wsUri);
 
@@ -123,8 +197,7 @@ function connectWebSocket() {
     wsConnection.onclose = () => {
         connectionStatus.className = 'status-badge disconnected';
         connectionStatus.innerHTML = '<span class="status-dot"></span> Offline';
-        // Auto-reconnect after 3 seconds
-        setTimeout(connectWebSocket, 3000);
+        setTimeout(connectWebSocket, 3000); // Reconnect loop
     };
 
     wsConnection.onmessage = (event) => {
@@ -137,23 +210,35 @@ function connectWebSocket() {
     };
 }
 
-// Update UI Stats & Chart
+// Update Stats & Charts with Broadcast Telemetry
 function updateStats(data) {
     statActive.innerText = data.active_count;
     statCrossings.innerText = data.total_crossings;
     statFps.innerText = data.fps.toFixed(1);
 
-    // Update Chart data
-    // Map class names to Chart index
-    const classMapping = {
-        'person': 0,
-        'bicycle': 1,
-        'car': 2,
-        'motorcycle': 3,
-        'bus': 4,
-        'truck': 5
-    };
+    // Concurrent viewer count
+    if (data.active_viewers !== undefined) {
+        document.getElementById('active-viewers').innerText = data.active_viewers;
+    }
 
+    // CPU/RAM usage meters
+    if (data.cpu_usage !== undefined) {
+        document.getElementById('cpu-val').innerText = `${data.cpu_usage.toFixed(0)}%`;
+        const cpuBar = document.getElementById('cpu-bar');
+        cpuBar.style.width = `${data.cpu_usage}%`;
+        cpuBar.className = 'progress-bar' + (data.cpu_usage > 85 ? ' danger' : data.cpu_usage > 60 ? ' warning' : '');
+    }
+    if (data.ram_usage !== undefined) {
+        document.getElementById('ram-val').innerText = `${data.ram_usage.toFixed(0)}%`;
+        const ramBar = document.getElementById('ram-bar');
+        ramBar.style.width = `${data.ram_usage}%`;
+        ramBar.className = 'progress-bar' + (data.ram_usage > 85 ? ' danger' : data.ram_usage > 60 ? ' warning' : '');
+    }
+
+    // Update crossings bar chart
+    const classMapping = {
+        'person': 0, 'bicycle': 1, 'car': 2, 'motorcycle': 3, 'bus': 4, 'truck': 5
+    };
     const counts = [0, 0, 0, 0, 0, 0];
     for (const [cls, count] of Object.entries(data.crossings_by_class)) {
         if (classMapping[cls] !== undefined) {
@@ -162,11 +247,24 @@ function updateStats(data) {
     }
     chart.data.datasets[0].data = counts;
     chart.update();
+
+    // Update flow line chart over time
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    flowChart.data.labels.push(timeStr);
+    flowChart.data.datasets[0].data.push(data.active_count);
+    flowChart.data.datasets[1].data.push(data.total_crossings);
+
+    // Retain only the last 15 points
+    if (flowChart.data.labels.length > 15) {
+        flowChart.data.labels.shift();
+        flowChart.data.datasets[0].data.shift();
+        flowChart.data.datasets[1].data.shift();
+    }
+    flowChart.update();
 }
 
-// Add Crossing Event Log
+// Add Crossing Log
 function addEventLog(eventData) {
-    // Remove empty log placeholder if there
     const emptyLog = eventLog.querySelector('.empty-log');
     if (emptyLog) {
         eventLog.removeChild(emptyLog);
@@ -186,30 +284,27 @@ function addEventLog(eventData) {
     li.appendChild(timestamp);
     li.appendChild(details);
 
-    // Prepend to show newest events at the top
     eventLog.insertBefore(li, eventLog.firstChild);
 
-    // Keep only last 30 logs
     while (eventLog.children.length > 30) {
         eventLog.removeChild(eventLog.lastChild);
     }
 }
 
-// Sync Form configurations with Backend
+// Sync session configuration with server
 function syncConfig() {
     const config = {
         model: modelSelect.value,
         conf_threshold: parseFloat(confSlider.value),
         line_position_ratio: parseFloat(lineSlider.value) / 100,
         classes: classCheckboxes.filter(cb => cb.checked).map(cb => parseInt(cb.value)),
-        source_type: tabVideo.classList.contains('active') ? 'video' : 'webcam'
+        source_type: tabVideo.classList.contains('active') ? 'video' : 'webcam',
+        video_file: datasetSelect.value || 'video.mp4'
     };
 
-    fetch('/api/config', {
+    fetch(`/api/config?session_id=${sessionId}`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
     })
     .then(res => res.json())
@@ -221,9 +316,8 @@ function syncConfig() {
     .catch(err => console.error('Error syncing config:', err));
 }
 
-// Event Listeners setup
+// Setup Event Listeners
 function setupEventListeners() {
-    // Sliders input visual feedback
     confSlider.addEventListener('input', () => {
         confVal.innerText = parseFloat(confSlider.value).toFixed(2);
     });
@@ -235,12 +329,12 @@ function setupEventListeners() {
     lineSlider.addEventListener('change', syncConfig);
 
     modelSelect.addEventListener('change', syncConfig);
+    datasetSelect.addEventListener('change', syncConfig);
 
     classCheckboxes.forEach(cb => {
         cb.addEventListener('change', syncConfig);
     });
 
-    // Control tabs
     tabVideo.addEventListener('click', () => {
         tabVideo.classList.add('active');
         tabCam.classList.remove('active');
@@ -255,7 +349,6 @@ function setupEventListeners() {
         syncConfig();
     });
 
-    // Custom File selection
     videoFileInput.addEventListener('change', () => {
         if (videoFileInput.files.length > 0) {
             const file = videoFileInput.files[0];
@@ -264,19 +357,18 @@ function setupEventListeners() {
         }
     });
 
-    // Playback Controls
     btnPlay.addEventListener('click', startStream);
     btnPause.addEventListener('click', pauseStream);
     btnReset.addEventListener('click', resetTracking);
 }
 
-// Upload Custom Video
+// Upload custom video for this user session
 function uploadVideoFile(file) {
     const formData = new FormData();
     formData.append('file', file);
 
     selectedFileName.innerText = "Uploading...";
-    fetch('/api/upload', {
+    fetch(`/api/upload?session_id=${sessionId}`, {
         method: 'POST',
         body: formData
     })
@@ -284,7 +376,25 @@ function uploadVideoFile(file) {
     .then(data => {
         if (data.status === 'success') {
             selectedFileName.innerText = `Uploaded: ${file.name}`;
-            resetTracking();
+            
+            // Re-fetch dataset list to populate dropdown with the newly uploaded dataset
+            fetch(`/api/datasets?session_id=${sessionId}`)
+            .then(res => res.json())
+            .then(datasetData => {
+                if (datasetData.status === 'success') {
+                    datasetSelect.innerHTML = '';
+                    datasetData.datasets.forEach(dataset => {
+                        const opt = document.createElement('option');
+                        opt.value = dataset;
+                        opt.innerText = dataset;
+                        if (dataset === data.filename) {
+                            opt.selected = true;
+                        }
+                        datasetSelect.appendChild(opt);
+                    });
+                    resetTracking();
+                }
+            });
         } else {
             selectedFileName.innerText = "Upload failed";
             alert(`Error: ${data.message}`);
@@ -296,11 +406,11 @@ function uploadVideoFile(file) {
     });
 }
 
-// Stream Actions
+// Play Stream actions
 function startStream() {
     if (isPlaying) return;
 
-    fetch('/api/control', {
+    fetch(`/api/control?session_id=${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'play' })
@@ -312,21 +422,20 @@ function startStream() {
             btnPlay.disabled = true;
             btnPause.disabled = false;
             
-            // Set image source to the stream endpoint
             const timestamp = new Date().getTime();
-            videoStream.src = `/api/stream?t=${timestamp}`;
+            videoStream.src = `/api/stream?session_id=${sessionId}&t=${timestamp}`;
             videoStream.style.display = 'block';
             streamPlaceholder.style.display = 'none';
         }
     })
-    .catch(err => console.error('Error playing stream:', err));
+    .catch(err => console.error('Error starting stream:', err));
 }
 
-// Stream Actions (Pause)
+// Pause Stream actions
 function pauseStream() {
     if (!isPlaying) return;
 
-    fetch('/api/control', {
+    fetch(`/api/control?session_id=${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'pause' })
@@ -338,7 +447,6 @@ function pauseStream() {
             btnPlay.disabled = false;
             btnPause.disabled = true;
             
-            // Stop image download
             videoStream.src = '';
             videoStream.style.display = 'none';
             streamPlaceholder.style.display = 'flex';
@@ -347,8 +455,9 @@ function pauseStream() {
     .catch(err => console.error('Error pausing stream:', err));
 }
 
+// Reset tracking stats
 function resetTracking() {
-    fetch('/api/control', {
+    fetch(`/api/control?session_id=${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reset' })
@@ -356,16 +465,17 @@ function resetTracking() {
     .then(res => res.json())
     .then(data => {
         if (data.status === 'success') {
-            // Reset stats
             statActive.innerText = '0';
             statCrossings.innerText = '0';
-            
-            // Clear event logs
             eventLog.innerHTML = '<li class="empty-log">No events recorded yet.</li>';
             
-            // Reset Chart
             chart.data.datasets[0].data = [0, 0, 0, 0, 0, 0];
             chart.update();
+
+            flowChart.data.labels = [];
+            flowChart.data.datasets[0].data = [];
+            flowChart.data.datasets[1].data = [];
+            flowChart.update();
         }
     })
     .catch(err => console.error('Error resetting stream:', err));

@@ -5,3 +5,4 @@ ultralytics
 lap
 python-multipart
 jinja2
+psutil

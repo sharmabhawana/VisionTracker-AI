@@ -714,3 +714,52 @@ input[type="range"]::-webkit-slider-thumb:hover {
     border-left-color: var(--color-danger);
     background: rgba(239, 68, 68, 0.05);
 }
+
+/* System Monitor Styles */
+.system-monitor {
+    margin-top: 15px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 15px;
+}
+
+.system-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 8px;
+}
+
+.stat-lbl {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--color-cyan);
+    box-shadow: var(--glow-cyan);
+    border-radius: 3px;
+    transition: width 0.5s ease, background-color 0.5s ease;
+}
+
+.progress-bar.warning {
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.progress-bar.danger {
+    background: var(--color-danger);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
