@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisionTracker AI - System Login</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS (Login uses same styling framework) -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="login-body">
+    <div class="login-wrapper">
+        <div class="glass-card login-card">
+            <div class="login-header">
+                <i class="fa-solid fa-shield-halved icon-glow"></i>
+                <h2>VisionTracker <span>AI</span></h2>
+                <p>Enter credentials to access CV Analytics Control Room</p>
+            </div>
+            
+            <form id="login-form" class="card-body">
+                <div id="error-message" class="error-banner" style="display: none;">
+                    <i class="fa-solid fa-circle-exclamation"></i> Invalid username or password.
+                </div>
+
+                <div class="form-group">
+                    <label for="username"><i class="fa-solid fa-user"></i> Username</label>
+                    <input type="text" id="username" placeholder="Enter username" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="password"><i class="fa-solid fa-lock"></i> Password</label>
+                    <input type="password" id="password" placeholder="Enter password" required autocomplete="off">
+                </div>
+
+                <button type="submit" class="btn btn-primary login-btn">
+                    <i class="fa-solid fa-right-to-bracket"></i> Authenticate
+                </button>
+
+                <div class="login-hint">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Demo account: <strong class="highlight">admin</strong> / <strong class="highlight">admin123</strong></span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Redirect if already logged in
+        if (localStorage.getItem('is_logged_in') === 'true') {
+            window.location.href = 'index.html';
+        }
+
+        const loginForm = document.getElementById('login-form');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const errorMessage = document.getElementById('error-message');
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
+
+            if (username === 'admin' && password === 'admin123') {
+                localStorage.setItem('is_logged_in', 'true');
+                localStorage.setItem('logged_user', username);
+                window.location.href = 'index.html';
+            } else {
+                errorMessage.style.display = 'block';
+                // Reset inputs
+                passwordInput.value = '';
+            }
+        });
+    </script>
+</body>
+</html>

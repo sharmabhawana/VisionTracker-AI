@@ -14,6 +14,12 @@
     <link rel="stylesheet" href="styles.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Authentication Protection -->
+    <script>
+        if (localStorage.getItem('is_logged_in') !== 'true') {
+            window.location.href = 'login.html';
+        }
+    </script>
 </head>
 <body>
     <div class="app-container">
@@ -24,14 +30,20 @@
                 <h1>VisionTracker <span>AI</span></h1>
             </div>
             <div class="header-status">
+                <span class="status-badge user-badge" style="margin-right: 10px; background: rgba(6, 182, 212, 0.1); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.2);">
+                    <i class="fa-solid fa-user-shield"></i> <span id="logged-user-name" style="margin-left: 5px;">Admin</span>
+                </span>
                 <span class="status-label"><i class="fa-solid fa-users"></i> Viewers:</span>
                 <span id="active-viewers" class="status-badge connected" style="margin-right: 15px;">
                     1
                 </span>
                 <span class="status-label">System:</span>
-                <span id="connection-status" class="status-badge disconnected">
+                <span id="connection-status" class="status-badge disconnected" style="margin-right: 15px;">
                     <span class="status-dot"></span> Disconnected
                 </span>
+                <button id="btn-logout" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem; flex: none; border-radius: 20px;" title="Log Out">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
             </div>
         </header>
 
@@ -128,8 +140,9 @@
                     <div class="form-group">
                         <label>Input Source</label>
                         <div class="input-tabs">
-                            <button id="src-btn-video" class="tab-btn active"><i class="fa-solid fa-file-video"></i> Video File</button>
+                            <button id="src-btn-video" class="tab-btn active"><i class="fa-solid fa-file-video"></i> Video</button>
                             <button id="src-btn-cam" class="tab-btn"><i class="fa-solid fa-video"></i> Webcam</button>
+                            <button id="src-btn-image" class="tab-btn"><i class="fa-solid fa-image"></i> Image</button>
                         </div>
                     </div>
 
@@ -142,6 +155,19 @@
                                 <i class="fa-solid fa-cloud-arrow-up"></i>
                                 <span>Choose Video File</span>
                                 <span class="file-name" id="selected-file-name">No file chosen</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Custom Image Upload -->
+                    <div id="image-upload-section" class="form-group" style="display: none;">
+                        <label>Upload Custom Image</label>
+                        <div class="file-upload-wrapper">
+                            <input type="file" id="image-file-input" accept="image/*">
+                            <label for="image-file-input" class="upload-area">
+                                <i class="fa-solid fa-file-image text-cyan"></i>
+                                <span>Choose Image File</span>
+                                <span class="file-name" id="selected-image-name">No file chosen</span>
                             </label>
                         </div>
                     </div>

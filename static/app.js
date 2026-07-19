@@ -18,6 +18,7 @@ const streamPlaceholder = document.getElementById('stream-placeholder');
 const btnPlay = document.getElementById('btn-play');
 const btnPause = document.getElementById('btn-pause');
 const btnReset = document.getElementById('btn-reset');
+const btnLogout = document.getElementById('btn-logout');
 
 const modelSelect = document.getElementById('model-select');
 const datasetSelect = document.getElementById('dataset-select');
@@ -37,9 +38,15 @@ const classCheckboxes = [
 
 const tabVideo = document.getElementById('src-btn-video');
 const tabCam = document.getElementById('src-btn-cam');
+const tabImage = document.getElementById('src-btn-image');
+
 const videoUploadSection = document.getElementById('video-upload-section');
 const videoFileInput = document.getElementById('video-file-input');
 const selectedFileName = document.getElementById('selected-file-name');
+
+const imageUploadSection = document.getElementById('image-upload-section');
+const imageFileInput = document.getElementById('image-file-input');
+const selectedImageName = document.getElementById('selected-image-name');
 
 const statActive = document.getElementById('stat-active');
 const statCrossings = document.getElementById('stat-crossings');
@@ -48,6 +55,12 @@ const eventLog = document.getElementById('event-log');
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
+    // Populate username display
+    const loggedUser = document.getElementById('logged-user-name');
+    if (loggedUser) {
+        loggedUser.innerText = localStorage.getItem('logged_user') || 'Admin';
+    }
+
     initChart();
     initFlowChart();
     loadDatasets();
@@ -293,12 +306,19 @@ function addEventLog(eventData) {
 
 // Sync session configuration with server
 function syncConfig() {
+    let source = 'video';
+    if (tabCam.classList.contains('active')) {
+        source = 'webcam';
+    } else if (tabImage.classList.contains('active')) {
+        source = 'image';
+    }
+
     const config = {
         model: modelSelect.value,
         conf_threshold: parseFloat(confSlider.value),
         line_position_ratio: parseFloat(lineSlider.value) / 100,
         classes: classCheckboxes.filter(cb => cb.checked).map(cb => parseInt(cb.value)),
-        source_type: tabVideo.classList.contains('active') ? 'video' : 'webcam',
+        source_type: source,
         video_file: datasetSelect.value || 'video.mp4'
     };
 
@@ -311,6 +331,10 @@ function syncConfig() {
     .then(data => {
         if (data.status !== 'success') {
             console.error('Config synchronization failed', data);
+        } else if (isPlaying) {
+            // Force stream reload to sync settings instantly
+            const timestamp = new Date().getTime();
+            videoStream.src = `/api/stream?session_id=${sessionId}&t=${timestamp}`;
         }
     })
     .catch(err => console.error('Error syncing config:', err));
@@ -335,25 +359,58 @@ function setupEventListeners() {
         cb.addEventListener('change', syncConfig);
     });
 
+    // Logout Command
+    if (btnLogout) {
+        btnLogout.addEventListener('click', () => {
+            localStorage.removeItem('is_logged_in');
+            localStorage.removeItem('logged_user');
+            window.location.href = 'login.html';
+        });
+    }
+
+    // Input Tabs Configuration
     tabVideo.addEventListener('click', () => {
         tabVideo.classList.add('active');
         tabCam.classList.remove('active');
+        tabImage.classList.remove('active');
         videoUploadSection.style.display = 'block';
+        imageUploadSection.style.display = 'none';
         syncConfig();
     });
 
     tabCam.addEventListener('click', () => {
         tabCam.classList.add('active');
         tabVideo.classList.remove('active');
+        tabImage.classList.remove('active');
         videoUploadSection.style.display = 'none';
+        imageUploadSection.style.display = 'none';
         syncConfig();
     });
 
+    tabImage.addEventListener('click', () => {
+        tabImage.classList.add('active');
+        tabVideo.classList.remove('active');
+        tabCam.classList.remove('active');
+        videoUploadSection.style.display = 'none';
+        imageUploadSection.style.display = 'block';
+        syncConfig();
+    });
+
+    // Custom Video File selection
     videoFileInput.addEventListener('change', () => {
         if (videoFileInput.files.length > 0) {
             const file = videoFileInput.files[0];
             selectedFileName.innerText = file.name;
             uploadVideoFile(file);
+        }
+    });
+
+    // Custom Image File selection
+    imageFileInput.addEventListener('change', () => {
+        if (imageFileInput.files.length > 0) {
+            const file = imageFileInput.files[0];
+            selectedImageName.innerText = file.name;
+            uploadImageFile(file);
         }
     });
 
@@ -393,6 +450,9 @@ function uploadVideoFile(file) {
                         datasetSelect.appendChild(opt);
                     });
                     resetTracking();
+                    
+                    // Automatically trigger stream play
+                    setTimeout(startStream, 500);
                 }
             });
         } else {
@@ -403,6 +463,35 @@ function uploadVideoFile(file) {
     .catch(err => {
         selectedFileName.innerText = "Upload error";
         console.error('Error uploading video:', err);
+    });
+}
+
+// Upload custom image for static analysis
+function uploadImageFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    selectedImageName.innerText = "Uploading...";
+    fetch(`/api/upload_image?session_id=${sessionId}`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            selectedImageName.innerText = `Uploaded: ${file.name}`;
+            resetTracking();
+            
+            // Automatically play static image stream
+            setTimeout(startStream, 500);
+        } else {
+            selectedImageName.innerText = "Upload failed";
+            alert(`Error: ${data.message}`);
+        }
+    })
+    .catch(err => {
+        selectedImageName.innerText = "Upload error";
+        console.error('Error uploading image:', err);
     });
 }
 
