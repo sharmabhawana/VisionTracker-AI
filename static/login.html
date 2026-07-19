@@ -1,80 +1,532 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VisionTracker AI - System Login</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Custom CSS (Login uses same styling framework) -->
-    <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VisionTracker AI – Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+/* ── Theme Variables ────────────────────────── */
+:root {
+    --font: 'Outfit', sans-serif;
+    --accent: #06b6d4;
+    --accent2: #8b5cf6;
+    --green: #10b981;
+    --danger: #ef4444;
+    --radius: 16px;
+    --transition: 0.3s ease;
+}
+[data-theme="dark"] {
+    --bg:       #080d18;
+    --bg2:      rgba(15, 23, 42, 0.85);
+    --border:   rgba(255,255,255,0.08);
+    --text:     #f1f5f9;
+    --muted:    #94a3b8;
+    --input-bg: rgba(255,255,255,0.06);
+    --card-shadow: 0 25px 60px rgba(0,0,0,0.6);
+    --glow: 0 0 40px rgba(6,182,212,0.2);
+}
+[data-theme="light"] {
+    --bg:       #f0f4f8;
+    --bg2:      rgba(255,255,255,0.88);
+    --border:   rgba(0,0,0,0.09);
+    --text:     #0f172a;
+    --muted:    #64748b;
+    --input-bg: rgba(0,0,0,0.04);
+    --card-shadow: 0 25px 60px rgba(100,116,139,0.18);
+    --glow: 0 0 40px rgba(6,182,212,0.12);
+}
+
+/* ── Reset ───────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    transition: background var(--transition), color var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+/* ── Animated Background ─────────────────────── */
+body::before, body::after {
+    content: '';
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    z-index: 0;
+    pointer-events: none;
+}
+body::before {
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(139,92,246,0.18), transparent 70%);
+    top: -100px; left: -100px;
+    animation: drift1 12s ease-in-out infinite alternate;
+}
+body::after {
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(6,182,212,0.15), transparent 70%);
+    bottom: -80px; right: -80px;
+    animation: drift2 10s ease-in-out infinite alternate;
+}
+@keyframes drift1 { to { transform: translate(80px, 60px); } }
+@keyframes drift2 { to { transform: translate(-60px, -40px); } }
+
+/* ── Theme Toggle ─────────────────────────────── */
+#theme-toggle {
+    position: fixed;
+    top: 22px; right: 22px;
+    z-index: 100;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    backdrop-filter: blur(12px);
+    transition: all var(--transition);
+    box-shadow: var(--card-shadow);
+}
+#theme-toggle:hover { transform: rotate(30deg) scale(1.1); }
+
+/* ── Card ─────────────────────────────────────── */
+.auth-card {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 440px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    backdrop-filter: blur(20px);
+    box-shadow: var(--card-shadow), var(--glow);
+    overflow: hidden;
+    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Card Header Logo ────────────────────────── */
+.auth-header {
+    text-align: center;
+    padding: 36px 32px 20px;
+    background: linear-gradient(135deg, rgba(139,92,246,0.12), rgba(6,182,212,0.08));
+    border-bottom: 1px solid var(--border);
+}
+.auth-logo {
+    width: 60px; height: 60px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px;
+    font-size: 1.6rem; color: white;
+    box-shadow: 0 8px 24px rgba(6,182,212,0.35);
+}
+.auth-header h1 { font-size: 1.55rem; font-weight: 700; }
+.auth-header h1 span { color: var(--accent); font-weight: 300; }
+.auth-header p { color: var(--muted); font-size: 0.83rem; margin-top: 4px; }
+
+/* ── Tab Switcher ────────────────────────────── */
+.auth-tabs {
+    display: flex;
+    gap: 0;
+    padding: 20px 28px 0;
+}
+.auth-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    border-bottom: 2px solid var(--border);
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 0.92rem;
+    font-weight: 500;
+    padding: 10px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.auth-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.auth-tab:hover:not(.active) { color: var(--text); }
+
+/* ── Form Panels ─────────────────────────────── */
+.auth-body { padding: 24px 28px 30px; }
+.auth-panel { display: none; }
+.auth-panel.active { display: block; animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+
+.form-group { margin-bottom: 18px; }
+.form-group label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 7px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+.input-wrap {
+    position: relative;
+}
+.input-wrap i {
+    position: absolute;
+    left: 14px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 0.9rem;
+    pointer-events: none;
+}
+.input-wrap input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.93rem;
+    padding: 11px 14px 11px 38px;
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+.input-wrap input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(6,182,212,0.15);
+}
+.input-wrap input::placeholder { color: var(--muted); }
+
+/* Password toggle */
+.input-wrap .eye-btn {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    color: var(--muted); cursor: pointer;
+    font-size: 0.9rem;
+    padding: 2px;
+    transition: color var(--transition);
+}
+.input-wrap .eye-btn:hover { color: var(--accent); }
+
+/* ── Alert / Error Banner ────────────────────── */
+.alert {
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 0.84rem;
+    display: flex; align-items: center; gap: 9px;
+    margin-bottom: 16px;
+    display: none;
+}
+.alert.error  { background: rgba(239,68,68,0.1);  border: 1px solid rgba(239,68,68,0.25);  color: #fca5a5; }
+.alert.success{ background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); color: #6ee7b7; }
+
+/* ── Submit Button ───────────────────────────── */
+.btn-submit {
+    width: 100%;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-family: var(--font);
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 13px;
+    cursor: pointer;
+    transition: all var(--transition);
+    margin-top: 6px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 6px 20px rgba(6,182,212,0.3);
+}
+.btn-submit:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(6,182,212,0.45); }
+.btn-submit:active { transform: translateY(0); }
+.btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+/* ── Hint ────────────────────────────────────── */
+.hint {
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    line-height: 1.6;
+}
+.hint strong { color: var(--accent); }
+
+/* ── Spinner ─────────────────────────────────── */
+.spinner { display: none; width: 18px; height: 18px; }
+.spinner svg { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
-<body class="login-body">
-    <div class="login-wrapper">
-        <div class="glass-card login-card">
-            <div class="login-header">
-                <i class="fa-solid fa-shield-halved icon-glow"></i>
-                <h2>VisionTracker <span>AI</span></h2>
-                <p>Enter credentials to access CV Analytics Control Room</p>
-            </div>
-            
-            <form id="login-form" class="card-body">
-                <div id="error-message" class="error-banner" style="display: none;">
-                    <i class="fa-solid fa-circle-exclamation"></i> Invalid username or password.
-                </div>
+<body>
 
-                <div class="form-group">
-                    <label for="username"><i class="fa-solid fa-user"></i> Username</label>
-                    <input type="text" id="username" placeholder="Enter username" required autocomplete="off">
-                </div>
+<!-- Theme toggle -->
+<button id="theme-toggle" title="Toggle Theme">
+    <i class="fa-solid fa-moon" id="theme-icon"></i>
+</button>
 
-                <div class="form-group">
-                    <label for="password"><i class="fa-solid fa-lock"></i> Password</label>
-                    <input type="password" id="password" placeholder="Enter password" required autocomplete="off">
-                </div>
-
-                <button type="submit" class="btn btn-primary login-btn">
-                    <i class="fa-solid fa-right-to-bracket"></i> Authenticate
-                </button>
-
-                <div class="login-hint">
-                    <i class="fa-solid fa-circle-info"></i>
-                    <span>Demo account: <strong class="highlight">admin</strong> / <strong class="highlight">admin123</strong></span>
-                </div>
-            </form>
-        </div>
+<div class="auth-card">
+    <!-- Header -->
+    <div class="auth-header">
+        <div class="auth-logo"><i class="fa-solid fa-microchip"></i></div>
+        <h1>VisionTracker <span>AI</span></h1>
+        <p>Computer Vision Analytics Platform</p>
     </div>
 
-    <script>
-        // Redirect if already logged in
-        if (localStorage.getItem('is_logged_in') === 'true') {
-            window.location.href = 'index.html';
-        }
+    <!-- Tabs -->
+    <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-signin" onclick="switchTab('signin')">
+            <i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In
+        </button>
+        <button class="auth-tab" id="tab-signup" onclick="switchTab('signup')">
+            <i class="fa-solid fa-user-plus"></i>&nbsp; Create Account
+        </button>
+    </div>
 
-        const loginForm = document.getElementById('login-form');
-        const usernameInput = document.getElementById('username');
-        const passwordInput = document.getElementById('password');
-        const errorMessage = document.getElementById('error-message');
+    <div class="auth-body">
 
-        loginForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const username = usernameInput.value.trim();
-            const password = passwordInput.value.trim();
+        <!-- ── SIGN IN PANEL ── -->
+        <div class="auth-panel active" id="panel-signin">
+            <div class="alert error" id="signin-error"><i class="fa-solid fa-circle-exclamation"></i><span id="signin-error-msg">Invalid credentials.</span></div>
+            <div class="alert success" id="signin-success"><i class="fa-solid fa-check-circle"></i><span id="signin-success-msg">Logging in...</span></div>
 
-            if (username === 'admin' && password === 'admin123') {
-                localStorage.setItem('is_logged_in', 'true');
-                localStorage.setItem('logged_user', username);
-                window.location.href = 'index.html';
-            } else {
-                errorMessage.style.display = 'block';
-                // Reset inputs
-                passwordInput.value = '';
-            }
+            <form id="signin-form" autocomplete="off">
+                <div class="form-group">
+                    <label>Username</label>
+                    <div class="input-wrap">
+                        <i class="fa-solid fa-user"></i>
+                        <input type="text" id="signin-username" placeholder="Enter your username" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="input-wrap">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="signin-password" placeholder="Enter your password" required>
+                        <button type="button" class="eye-btn" onclick="togglePw('signin-password',this)"><i class="fa-solid fa-eye"></i></button>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit" id="signin-btn">
+                    <span class="spinner" id="signin-spinner">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                            <circle cx="12" cy="12" r="10" stroke-opacity="0.3"/>
+                            <path d="M12 2a10 10 0 0 1 10 10"/>
+                        </svg>
+                    </span>
+                    <i class="fa-solid fa-right-to-bracket" id="signin-icon"></i>
+                    <span id="signin-label">Sign In</span>
+                </button>
+            </form>
+
+            <div class="hint">
+                Demo admin: <strong>bhawanasharma</strong> / <strong>sharma#1S</strong><br>
+                New here? <a href="#" style="color:var(--accent); text-decoration:none;" onclick="switchTab('signup')">Create a free account →</a>
+            </div>
+        </div>
+
+        <!-- ── SIGN UP PANEL ── -->
+        <div class="auth-panel" id="panel-signup">
+            <div class="alert error" id="signup-error"><i class="fa-solid fa-circle-exclamation"></i><span id="signup-error-msg">An error occurred.</span></div>
+            <div class="alert success" id="signup-success"><i class="fa-solid fa-check-circle"></i><span>Account created! Redirecting...</span></div>
+
+            <form id="signup-form" autocomplete="off">
+                <div class="form-group">
+                    <label>Display Name</label>
+                    <div class="input-wrap">
+                        <i class="fa-solid fa-id-card"></i>
+                        <input type="text" id="signup-displayname" placeholder="Your full name (optional)">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Username <span style="color:var(--danger)">*</span></label>
+                    <div class="input-wrap">
+                        <i class="fa-solid fa-user"></i>
+                        <input type="text" id="signup-username" placeholder="Choose a username (min 3 chars)" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Password <span style="color:var(--danger)">*</span></label>
+                    <div class="input-wrap">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="signup-password" placeholder="Create a password (min 6 chars)" required>
+                        <button type="button" class="eye-btn" onclick="togglePw('signup-password',this)"><i class="fa-solid fa-eye"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password <span style="color:var(--danger)">*</span></label>
+                    <div class="input-wrap">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="signup-confirm" placeholder="Repeat your password" required>
+                        <button type="button" class="eye-btn" onclick="togglePw('signup-confirm',this)"><i class="fa-solid fa-eye"></i></button>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit" id="signup-btn">
+                    <span class="spinner" id="signup-spinner">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                            <circle cx="12" cy="12" r="10" stroke-opacity="0.3"/>
+                            <path d="M12 2a10 10 0 0 1 10 10"/>
+                        </svg>
+                    </span>
+                    <i class="fa-solid fa-user-plus" id="signup-icon"></i>
+                    <span>Create Account</span>
+                </button>
+            </form>
+
+            <div class="hint">
+                Already have an account? <a href="#" style="color:var(--accent); text-decoration:none;" onclick="switchTab('signin')">Sign In →</a>
+            </div>
+        </div>
+
+    </div><!-- .auth-body -->
+</div><!-- .auth-card -->
+
+<script>
+// ── Theme ────────────────────────────────────────
+const html = document.documentElement;
+const themeToggle = document.getElementById('theme-toggle');
+const themeIcon   = document.getElementById('theme-icon');
+
+let currentTheme = localStorage.getItem('vt_theme') || 'dark';
+applyTheme(currentTheme);
+
+function applyTheme(t) {
+    currentTheme = t;
+    html.dataset.theme = t;
+    themeIcon.className = t === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+    localStorage.setItem('vt_theme', t);
+}
+themeToggle.addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+
+// If already logged in, redirect
+if (localStorage.getItem('vt_token')) {
+    window.location.href = 'index.html';
+}
+
+// ── Tab Switcher ─────────────────────────────────
+function switchTab(tab) {
+    document.getElementById('panel-signin').classList.toggle('active', tab === 'signin');
+    document.getElementById('panel-signup').classList.toggle('active', tab === 'signup');
+    document.getElementById('tab-signin').classList.toggle('active', tab === 'signin');
+    document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+}
+
+// ── Password Toggle ──────────────────────────────
+function togglePw(id, btn) {
+    const input = document.getElementById(id);
+    const isText = input.type === 'text';
+    input.type = isText ? 'password' : 'text';
+    btn.querySelector('i').className = isText ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+}
+
+// ── Show / Hide Alerts ───────────────────────────
+function showAlert(id, msgId, msg, type) {
+    const el = document.getElementById(id);
+    if (msgId) document.getElementById(msgId).textContent = msg;
+    el.className = `alert ${type}`;
+    el.style.display = 'flex';
+    if (type === 'success') setTimeout(() => el.style.display = 'none', 5000);
+}
+function hideAlerts(prefix) {
+    ['error','success'].forEach(t => { const el = document.getElementById(`${prefix}-${t}`); if(el) el.style.display='none'; });
+}
+
+// ── Loading state ────────────────────────────────
+function setLoading(prefix, loading) {
+    document.getElementById(`${prefix}-spinner`).style.display = loading ? 'inline-block' : 'none';
+    document.getElementById(`${prefix}-icon`).style.display    = loading ? 'none' : 'inline-block';
+    document.getElementById(`${prefix}-btn`).disabled = loading;
+}
+
+// ── Persist Auth ─────────────────────────────────
+function storeAuth(data) {
+    localStorage.setItem('vt_token',    data.token);
+    localStorage.setItem('vt_username', data.username);
+    localStorage.setItem('vt_display',  data.display_name);
+    localStorage.setItem('vt_role',     data.role);
+}
+
+// ── Sign In ──────────────────────────────────────
+document.getElementById('signin-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideAlerts('signin');
+    setLoading('signin', true);
+    const username = document.getElementById('signin-username').value.trim();
+    const password = document.getElementById('signin-password').value;
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
         });
-    </script>
+        const data = await res.json();
+        if (!res.ok) {
+            showAlert('signin-error', 'signin-error-msg', data.detail || 'Invalid credentials.', 'error');
+        } else {
+            storeAuth(data);
+            showAlert('signin-success', 'signin-success-msg', `Welcome back, ${data.display_name}!`, 'success');
+            setTimeout(() => window.location.href = 'index.html', 800);
+        }
+    } catch (err) {
+        showAlert('signin-error', 'signin-error-msg', 'Network error. Is the server running?', 'error');
+    } finally {
+        setLoading('signin', false);
+    }
+});
+
+// ── Sign Up ──────────────────────────────────────
+document.getElementById('signup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideAlerts('signup');
+    const username     = document.getElementById('signup-username').value.trim();
+    const password     = document.getElementById('signup-password').value;
+    const confirm      = document.getElementById('signup-confirm').value;
+    const display_name = document.getElementById('signup-displayname').value.trim();
+
+    if (password !== confirm) {
+        showAlert('signup-error', 'signup-error-msg', 'Passwords do not match.', 'error');
+        return;
+    }
+    if (username.length < 3) {
+        showAlert('signup-error', 'signup-error-msg', 'Username must be at least 3 characters.', 'error');
+        return;
+    }
+    if (password.length < 6) {
+        showAlert('signup-error', 'signup-error-msg', 'Password must be at least 6 characters.', 'error');
+        return;
+    }
+
+    setLoading('signup', true);
+    try {
+        const res = await fetch('/api/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, display_name: display_name || username })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showAlert('signup-error', 'signup-error-msg', data.detail || 'Signup failed.', 'error');
+        } else {
+            storeAuth(data);
+            document.getElementById('signup-success').style.display = 'flex';
+            setTimeout(() => window.location.href = 'index.html', 900);
+        }
+    } catch (err) {
+        showAlert('signup-error', 'signup-error-msg', 'Network error. Is the server running?', 'error');
+    } finally {
+        setLoading('signup', false);
+    }
+});
+</script>
 </body>
 </html>

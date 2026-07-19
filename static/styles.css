@@ -1,20 +1,38 @@
-/* General CSS Variables */
+/* ── Theme Variables (dark default) ─────────── */
 :root {
-    --bg-dark: #0a0e1a;
-    --bg-card: rgba(17, 24, 39, 0.6);
-    --bg-card-hover: rgba(31, 41, 55, 0.7);
-    --border-color: rgba(255, 255, 255, 0.07);
+    --font-family: 'Outfit', sans-serif;
     --color-primary: #3b82f6;
     --color-success: #10b981;
-    --color-danger: #ef4444;
-    --color-cyan: #06b6d4;
-    --color-purple: #8b5cf6;
-    --color-text: #f3f4f6;
-    --color-text-muted: #9ca3af;
-    --font-family: 'Outfit', sans-serif;
-    --glow-cyan: 0 0 15px rgba(6, 182, 212, 0.4);
-    --glow-green: 0 0 15px rgba(16, 185, 129, 0.4);
+    --color-danger:  #ef4444;
+    --color-cyan:    #06b6d4;
+    --color-purple:  #8b5cf6;
+    --glow-cyan:   0 0 15px rgba(6, 182, 212, 0.4);
+    --glow-green:  0 0 15px rgba(16, 185, 129, 0.4);
     --glow-purple: 0 0 15px rgba(139, 92, 246, 0.4);
+}
+
+/* Dark theme */
+[data-theme="dark"] {
+    --bg-dark:        #0a0e1a;
+    --bg-card:        rgba(17, 24, 39, 0.65);
+    --bg-card-hover:  rgba(31, 41, 55, 0.75);
+    --border-color:   rgba(255, 255, 255, 0.07);
+    --color-text:     #f3f4f6;
+    --color-text-muted: #9ca3af;
+    --input-bg:       rgba(255,255,255,0.06);
+    --scrollbar-thumb: rgba(255,255,255,0.12);
+}
+
+/* Light theme */
+[data-theme="light"] {
+    --bg-dark:        #e8edf5;
+    --bg-card:        rgba(255, 255, 255, 0.75);
+    --bg-card-hover:  rgba(255, 255, 255, 0.88);
+    --border-color:   rgba(0, 0, 0, 0.09);
+    --color-text:     #0f172a;
+    --color-text-muted: #64748b;
+    --input-bg:       rgba(0,0,0,0.04);
+    --scrollbar-thumb: rgba(0,0,0,0.15);
 }
 
 /* Reset & Scrollbars */
@@ -26,14 +44,15 @@
 
 body {
     background-color: var(--bg-dark);
-    background-image: 
-        radial-gradient(at 10% 20%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
-        radial-gradient(at 90% 80%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
+    background-image:
+        radial-gradient(at 10% 20%, rgba(139, 92, 246, 0.12) 0px, transparent 50%),
+        radial-gradient(at 90% 80%, rgba(6, 182, 212, 0.12) 0px, transparent 50%);
     background-attachment: fixed;
     color: var(--color-text);
     font-family: var(--font-family);
     min-height: 100vh;
     overflow-x: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 ::-webkit-scrollbar {
@@ -863,3 +882,68 @@ input[type="range"]::-webkit-slider-thumb:hover {
     color: var(--color-cyan);
 }
 
+/* ── Upload Progress Bar ──────────────────── */
+.upload-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+.upload-progress-bar {
+    flex: 1;
+    height: 5px;
+    background: linear-gradient(90deg, var(--color-cyan), var(--color-purple));
+    border-radius: 3px;
+    transition: width 0.2s ease;
+    width: 0%;
+}
+.upload-progress span {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    min-width: 32px;
+}
+
+/* ── Theme / Icon Button ─────────────────── */
+.btn-icon {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border-color);
+    color: var(--color-cyan);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.25s ease;
+    flex: none;
+}
+.btn-icon:hover { background: rgba(6,182,212,0.15); transform: rotate(20deg); }
+
+/* ── Light Mode Overrides ────────────────── */
+[data-theme="light"] .glass-card,
+[data-theme="light"] .glass-header,
+[data-theme="light"] .glass-subcard {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+[data-theme="light"] input[type="range"] {
+    accent-color: var(--color-cyan);
+}
+[data-theme="light"] select,
+[data-theme="light"] .select-wrapper select {
+    background: var(--input-bg);
+    color: var(--color-text);
+    border-color: var(--border-color);
+}
+[data-theme="light"] .upload-area {
+    background: var(--input-bg);
+    border-color: var(--border-color);
+}
+[data-theme="light"] .event-log-list {
+    background: rgba(0,0,0,0.03);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+[data-theme="light"] .stream-placeholder {
+    background: rgba(0,0,0,0.04);
+}

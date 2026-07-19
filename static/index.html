@@ -1,263 +1,252 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VisionTracker AI - Computer Vision Analytics Dashboard</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="styles.css">
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Authentication Protection -->
-    <script>
-        if (localStorage.getItem('is_logged_in') !== 'true') {
-            window.location.href = 'login.html';
-        }
-    </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VisionTracker AI – Analytics Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Auth guard — must run before render
+    (function() {
+        const token = localStorage.getItem('vt_token');
+        if (!token) { window.location.href = 'login.html'; }
+        // Apply saved theme immediately to avoid flash
+        const theme = localStorage.getItem('vt_theme') || 'dark';
+        document.documentElement.dataset.theme = theme;
+    })();
+</script>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Top Navigation / Header -->
-        <header class="glass-header">
-            <div class="header-logo">
-                <i class="fa-solid fa-microchip icon-glow"></i>
-                <h1>VisionTracker <span>AI</span></h1>
+<div class="app-container">
+
+    <!-- ── Header ─────────────────────────────── -->
+    <header class="glass-header">
+        <div class="header-logo">
+            <i class="fa-solid fa-microchip icon-glow"></i>
+            <h1>VisionTracker <span>AI</span></h1>
+        </div>
+        <div class="header-status">
+            <!-- User badge -->
+            <span class="status-badge user-badge">
+                <i class="fa-solid fa-user-shield"></i>
+                <span id="logged-user-name">User</span>
+                <span id="role-badge" class="role-tag"></span>
+            </span>
+            <!-- Viewers -->
+            <span class="status-label"><i class="fa-solid fa-users"></i></span>
+            <span id="active-viewers" class="status-badge connected" title="Active users">1</span>
+            <!-- Connection -->
+            <span id="connection-status" class="status-badge disconnected">
+                <span class="status-dot"></span> Offline
+            </span>
+            <!-- Theme toggle -->
+            <button id="btn-theme" class="btn btn-icon" title="Toggle theme">
+                <i class="fa-solid fa-moon" id="theme-icon"></i>
+            </button>
+            <!-- Logout -->
+            <button id="btn-logout" class="btn btn-danger" title="Log Out">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ── Dashboard Grid ─────────────────────── -->
+    <main class="dashboard-grid">
+
+        <!-- Left: Config Panel -->
+        <section class="grid-card control-panel glass-card">
+            <div class="card-header">
+                <i class="fa-solid fa-sliders text-cyan"></i>
+                <h2>Tracker Configuration</h2>
             </div>
-            <div class="header-status">
-                <span class="status-badge user-badge" style="margin-right: 10px; background: rgba(6, 182, 212, 0.1); color: var(--color-cyan); border-color: rgba(6, 182, 212, 0.2);">
-                    <i class="fa-solid fa-user-shield"></i> <span id="logged-user-name" style="margin-left: 5px;">Admin</span>
-                </span>
-                <span class="status-label"><i class="fa-solid fa-users"></i> Viewers:</span>
-                <span id="active-viewers" class="status-badge connected" style="margin-right: 15px;">
-                    1
-                </span>
-                <span class="status-label">System:</span>
-                <span id="connection-status" class="status-badge disconnected" style="margin-right: 15px;">
-                    <span class="status-dot"></span> Disconnected
-                </span>
-                <button id="btn-logout" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem; flex: none; border-radius: 20px;" title="Log Out">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                </button>
+            <div class="card-body">
+
+                <!-- Model -->
+                <div class="form-group">
+                    <label for="model-select">Detection Model</label>
+                    <div class="select-wrapper">
+                        <select id="model-select">
+                            <option value="yolov8n.pt">YOLOv8 Nano (Fastest)</option>
+                            <option value="yolov8s.pt">YOLOv8 Small (Balanced)</option>
+                            <option value="yolov8m.pt">YOLOv8 Medium (Accurate)</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down select-arrow"></i>
+                    </div>
+                </div>
+
+                <!-- Dataset -->
+                <div class="form-group">
+                    <label for="dataset-select">Active Dataset</label>
+                    <div class="select-wrapper">
+                        <select id="dataset-select">
+                            <option value="">-- Loading datasets... --</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down select-arrow"></i>
+                    </div>
+                </div>
+
+                <!-- Confidence -->
+                <div class="form-group">
+                    <div class="slider-header">
+                        <label for="conf-slider">Confidence Threshold</label>
+                        <span id="conf-val">0.25</span>
+                    </div>
+                    <input type="range" id="conf-slider" min="0.05" max="1.00" step="0.05" value="0.25">
+                </div>
+
+                <!-- Target Classes -->
+                <div class="form-group">
+                    <label>Target Classes</label>
+                    <div class="class-grid">
+                        <label class="class-checkbox"><input type="checkbox" id="class-person"     value="0"  checked><span class="checkbox-custom"></span><i class="fa-solid fa-user"></i> Person</label>
+                        <label class="class-checkbox"><input type="checkbox" id="class-bicycle"    value="1"  checked><span class="checkbox-custom"></span><i class="fa-solid fa-bicycle"></i> Bicycle</label>
+                        <label class="class-checkbox"><input type="checkbox" id="class-car"        value="2"  checked><span class="checkbox-custom"></span><i class="fa-solid fa-car"></i> Car</label>
+                        <label class="class-checkbox"><input type="checkbox" id="class-motorcycle" value="3"  checked><span class="checkbox-custom"></span><i class="fa-solid fa-motorcycle"></i> Moto</label>
+                        <label class="class-checkbox"><input type="checkbox" id="class-bus"        value="5"  checked><span class="checkbox-custom"></span><i class="fa-solid fa-bus"></i> Bus</label>
+                        <label class="class-checkbox"><input type="checkbox" id="class-truck"      value="7"  checked><span class="checkbox-custom"></span><i class="fa-solid fa-truck"></i> Truck</label>
+                    </div>
+                </div>
+
+                <!-- Line Position -->
+                <div class="form-group">
+                    <div class="slider-header">
+                        <label for="line-slider">Counting Line Y (%)</label>
+                        <span id="line-val">50%</span>
+                    </div>
+                    <input type="range" id="line-slider" min="10" max="90" step="5" value="50">
+                </div>
+
+                <!-- Source Tabs -->
+                <div class="form-group">
+                    <label>Input Source</label>
+                    <div class="input-tabs">
+                        <button id="src-btn-video"  class="tab-btn active"><i class="fa-solid fa-file-video"></i> Video</button>
+                        <button id="src-btn-cam"    class="tab-btn"><i class="fa-solid fa-video"></i> Webcam</button>
+                        <button id="src-btn-image"  class="tab-btn"><i class="fa-solid fa-image"></i> Image</button>
+                    </div>
+                </div>
+
+                <!-- Video Upload -->
+                <div id="video-upload-section" class="form-group">
+                    <label>Upload Video File</label>
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="video-file-input" accept="video/*">
+                        <label for="video-file-input" class="upload-area">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <span>Choose or Drop Video</span>
+                            <span class="file-name" id="selected-file-name">No file chosen</span>
+                        </label>
+                    </div>
+                    <div id="upload-progress" class="upload-progress" style="display:none">
+                        <div class="upload-progress-bar" id="upload-bar"></div>
+                        <span id="upload-pct">0%</span>
+                    </div>
+                </div>
+
+                <!-- Image Upload -->
+                <div id="image-upload-section" class="form-group" style="display:none">
+                    <label>Upload Image for Analysis</label>
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="image-file-input" accept="image/*">
+                        <label for="image-file-input" class="upload-area">
+                            <i class="fa-solid fa-file-image text-cyan"></i>
+                            <span>Choose Image File</span>
+                            <span class="file-name" id="selected-image-name">No file chosen</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Server Resources -->
+                <div class="form-group system-monitor">
+                    <label>Server Resources</label>
+                    <div class="system-stat">
+                        <div class="stat-lbl"><span>CPU</span><span id="cpu-val">0%</span></div>
+                        <div class="progress-bar-container"><div id="cpu-bar" class="progress-bar" style="width:0%"></div></div>
+                    </div>
+                    <div class="system-stat">
+                        <div class="stat-lbl"><span>RAM</span><span id="ram-val">0%</span></div>
+                        <div class="progress-bar-container"><div id="ram-bar" class="progress-bar" style="width:0%"></div></div>
+                    </div>
+                </div>
+
             </div>
-        </header>
+        </section>
 
-        <!-- Main Dashboard Layout -->
-        <main class="dashboard-grid">
-            
-            <!-- Left Panel: Configuration & Controls -->
-            <section class="grid-card control-panel glass-card">
-                <div class="card-header">
-                    <i class="fa-solid fa-sliders text-cyan"></i>
-                    <h2>Tracker Configuration</h2>
-                </div>
-                <div class="card-body">
-                    <!-- Model Selection -->
-                    <div class="form-group">
-                        <label for="model-select">Detection Model</label>
-                        <div class="select-wrapper">
-                            <select id="model-select">
-                                <option value="yolov8n.pt">YOLOv8 Nano (Fastest)</option>
-                                <option value="yolov8s.pt">YOLOv8 Small (Balanced)</option>
-                                <option value="yolov8m.pt">YOLOv8 Medium (Accurate)</option>
-                            </select>
-                            <i class="fa-solid fa-chevron-down select-arrow"></i>
-                        </div>
-                    </div>
-
-                    <!-- Dataset Selection -->
-                    <div class="form-group">
-                        <label for="dataset-select">Active Dataset</label>
-                        <div class="select-wrapper">
-                            <select id="dataset-select">
-                                <option value="video.mp4">Default (video.mp4)</option>
-                            </select>
-                            <i class="fa-solid fa-chevron-down select-arrow"></i>
-                        </div>
-                    </div>
-
-                    <!-- Confidence Threshold -->
-                    <div class="form-group">
-                        <div class="slider-header">
-                            <label for="conf-slider">Confidence Threshold</label>
-                            <span id="conf-val">0.25</span>
-                        </div>
-                        <input type="range" id="conf-slider" min="0.05" max="1.00" step="0.05" value="0.25">
-                    </div>
-
-                    <!-- Tracking Classes -->
-                    <div class="form-group">
-                        <label>Target Classes</label>
-                        <div class="class-grid">
-                            <label class="class-checkbox">
-                                <input type="checkbox" id="class-person" value="0" checked>
-                                <span class="checkbox-custom"></span>
-                                <i class="fa-solid fa-user"></i> Person
-                            </label>
-                            <label class="class-checkbox">
-                                <input type="checkbox" id="class-bicycle" value="1" checked>
-                                <span class="checkbox-custom"></span>
-                                <i class="fa-solid fa-bicycle"></i> Bicycle
-                            </label>
-                            <label class="class-checkbox">
-                                <input type="checkbox" id="class-car" value="2" checked>
-                                <span class="checkbox-custom"></span>
-                                <i class="fa-solid fa-car"></i> Car
-                            </label>
-                            <label class="class-checkbox">
-                                <input type="checkbox" id="class-motorcycle" value="3" checked>
-                                <span class="checkbox-custom"></span>
-                                <i class="fa-solid fa-motorcycle"></i> Motorcycle
-                            </label>
-                            <label class="class-checkbox">
-                                <input type="checkbox" id="class-bus" value="5" checked>
-                                <span class="checkbox-custom"></span>
-                                <i class="fa-solid fa-bus"></i> Bus
-                            </label>
-                            <label class="class-checkbox">
-                                <input type="checkbox" id="class-truck" value="7" checked>
-                                <span class="checkbox-custom"></span>
-                                <i class="fa-solid fa-truck"></i> Truck
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Line Crossing Position -->
-                    <div class="form-group">
-                        <div class="slider-header">
-                            <label for="line-slider">Counting Line Y-Position (%)</label>
-                            <span id="line-val">50%</span>
-                        </div>
-                        <input type="range" id="line-slider" min="10" max="90" step="5" value="50">
-                    </div>
-
-                    <!-- Source Selection -->
-                    <div class="form-group">
-                        <label>Input Source</label>
-                        <div class="input-tabs">
-                            <button id="src-btn-video" class="tab-btn active"><i class="fa-solid fa-file-video"></i> Video</button>
-                            <button id="src-btn-cam" class="tab-btn"><i class="fa-solid fa-video"></i> Webcam</button>
-                            <button id="src-btn-image" class="tab-btn"><i class="fa-solid fa-image"></i> Image</button>
-                        </div>
-                    </div>
-
-                    <!-- Custom Video Upload -->
-                    <div id="video-upload-section" class="form-group">
-                        <label>Upload Custom Video</label>
-                        <div class="file-upload-wrapper">
-                            <input type="file" id="video-file-input" accept="video/*">
-                            <label for="video-file-input" class="upload-area">
-                                <i class="fa-solid fa-cloud-arrow-up"></i>
-                                <span>Choose Video File</span>
-                                <span class="file-name" id="selected-file-name">No file chosen</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Custom Image Upload -->
-                    <div id="image-upload-section" class="form-group" style="display: none;">
-                        <label>Upload Custom Image</label>
-                        <div class="file-upload-wrapper">
-                            <input type="file" id="image-file-input" accept="image/*">
-                            <label for="image-file-input" class="upload-area">
-                                <i class="fa-solid fa-file-image text-cyan"></i>
-                                <span>Choose Image File</span>
-                                <span class="file-name" id="selected-image-name">No file chosen</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- System Monitoring -->
-                    <div class="form-group system-monitor">
-                        <label>Server Resource usage</label>
-                        <div class="system-stat">
-                            <div class="stat-lbl"><span>CPU Load</span><span id="cpu-val">0%</span></div>
-                            <div class="progress-bar-container"><div id="cpu-bar" class="progress-bar" style="width: 0%"></div></div>
-                        </div>
-                        <div class="system-stat">
-                            <div class="stat-lbl"><span>RAM Usage</span><span id="ram-val">0%</span></div>
-                            <div class="progress-bar-container"><div id="ram-bar" class="progress-bar" style="width: 0%"></div></div>
-                        </div>
+        <!-- Center: Stream Panel -->
+        <section class="grid-card stream-panel glass-card">
+            <div class="card-header">
+                <i class="fa-solid fa-display text-green"></i>
+                <h2>Live Detection Stream</h2>
+            </div>
+            <div class="card-body stream-container">
+                <div class="video-wrapper">
+                    <img id="video-stream" src="" alt="" class="stream-image" style="display:none">
+                    <div id="stream-placeholder" class="stream-placeholder">
+                        <i class="fa-solid fa-play-circle play-placeholder-icon"></i>
+                        <p>Stream Inactive — Click <strong>Play</strong> to start</p>
                     </div>
                 </div>
-            </section>
-
-            <!-- Center Panel: Live Video Feed & Display Controls -->
-            <section class="grid-card stream-panel glass-card">
-                <div class="card-header">
-                    <i class="fa-solid fa-display text-green"></i>
-                    <h2>Live Detection Stream</h2>
+                <div class="stream-controls">
+                    <button id="btn-play"  class="btn btn-primary"><i class="fa-solid fa-play"></i> Play</button>
+                    <button id="btn-pause" class="btn btn-secondary" disabled><i class="fa-solid fa-pause"></i> Pause</button>
+                    <button id="btn-reset" class="btn btn-danger"><i class="fa-solid fa-arrow-rotate-left"></i> Reset</button>
                 </div>
-                <div class="card-body stream-container">
-                    <div class="video-wrapper">
-                        <!-- We display the stream here -->
-                        <img id="video-stream" src="" alt="Click Play to Start Stream" class="stream-image">
-                        <div id="stream-placeholder" class="stream-placeholder">
-                            <i class="fa-solid fa-play-circle play-placeholder-icon"></i>
-                            <p>Stream Inactive. Click Play below to start.</p>
-                        </div>
-                    </div>
-                    <div class="stream-controls">
-                        <button id="btn-play" class="btn btn-primary"><i class="fa-solid fa-play"></i> Play</button>
-                        <button id="btn-pause" class="btn btn-secondary" disabled><i class="fa-solid fa-pause"></i> Pause</button>
-                        <button id="btn-reset" class="btn btn-danger"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Counters</button>
-                    </div>
-                </div>
-            </section>
+            </div>
+        </section>
 
-            <!-- Right Panel: Live Stats & Analytics Chart -->
-            <section class="grid-card analytics-panel glass-card">
-                <div class="card-header">
-                    <i class="fa-solid fa-chart-line text-purple"></i>
-                    <h2>Real-time Analytics</h2>
-                </div>
-                <div class="card-body">
-                    <!-- Stat Cards Grid -->
-                    <div class="stats-row">
-                        <div class="stat-card glass-subcard">
-                            <span class="stat-title">Active Tracks</span>
-                            <span id="stat-active" class="stat-value text-cyan">0</span>
-                        </div>
-                        <div class="stat-card glass-subcard">
-                            <span class="stat-title">Line Crossings</span>
-                            <span id="stat-crossings" class="stat-value text-green">0</span>
-                        </div>
-                        <div class="stat-card glass-subcard">
-                            <span class="stat-title">FPS</span>
-                            <span id="stat-fps" class="stat-value text-purple">0.0</span>
-                        </div>
+        <!-- Right: Analytics Panel -->
+        <section class="grid-card analytics-panel glass-card">
+            <div class="card-header">
+                <i class="fa-solid fa-chart-line text-purple"></i>
+                <h2>Real‑time Analytics</h2>
+            </div>
+            <div class="card-body">
+                <!-- Stat Cards -->
+                <div class="stats-row">
+                    <div class="stat-card glass-subcard">
+                        <span class="stat-title">Active Tracks</span>
+                        <span id="stat-active" class="stat-value text-cyan">0</span>
                     </div>
-
-                    <!-- Chart Containers -->
-                    <div class="charts-wrapper" style="display: flex; flex-direction: column; gap: 15px;">
-                        <div class="chart-container" style="height: 160px; position: relative;">
-                            <canvas id="analytics-chart"></canvas>
-                        </div>
-                        <div class="chart-container" style="height: 160px; position: relative;">
-                            <canvas id="flow-chart"></canvas>
-                        </div>
+                    <div class="stat-card glass-subcard">
+                        <span class="stat-title">Line Crossings</span>
+                        <span id="stat-crossings" class="stat-value text-green">0</span>
                     </div>
-
-                    <!-- Event log section -->
-                    <div class="event-log-container">
-                        <div class="log-header">
-                            <i class="fa-solid fa-list-check"></i>
-                            <h3>Crossing Events</h3>
-                        </div>
-                        <ul id="event-log" class="event-log-list">
-                            <li class="empty-log">No events recorded yet.</li>
-                        </ul>
+                    <div class="stat-card glass-subcard">
+                        <span class="stat-title">FPS</span>
+                        <span id="stat-fps" class="stat-value text-purple">0.0</span>
                     </div>
                 </div>
-            </section>
-        </main>
-    </div>
-    <!-- Custom JS -->
-    <script src="app.js"></script>
+
+                <!-- Charts -->
+                <div class="charts-wrapper">
+                    <div class="chart-container" style="height:155px;position:relative;">
+                        <canvas id="analytics-chart"></canvas>
+                    </div>
+                    <div class="chart-container" style="height:155px;position:relative;">
+                        <canvas id="flow-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Event Log -->
+                <div class="event-log-container">
+                    <div class="log-header">
+                        <i class="fa-solid fa-list-check"></i>
+                        <h3>Crossing Events</h3>
+                    </div>
+                    <ul id="event-log" class="event-log-list">
+                        <li class="empty-log">No events yet.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>

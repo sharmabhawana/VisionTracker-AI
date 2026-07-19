@@ -1,571 +1,503 @@
-// Global State
-let wsConnection = null;
+/**
+ * VisionTracker AI – app.js
+ * Token-based multi-user dashboard controller
+ */
+
+// ─────────────────────────────────────────────
+//  Auth Helpers
+// ─────────────────────────────────────────────
+function getToken()   { return localStorage.getItem('vt_token') || ''; }
+function getUsername(){ return localStorage.getItem('vt_username') || 'User'; }
+function getDisplay() { return localStorage.getItem('vt_display') || getUsername(); }
+function getRole()    { return localStorage.getItem('vt_role') || 'user'; }
+
+function logout() {
+    const token = getToken();
+    if (token) fetch(`/api/logout?token=${token}`, { method: 'POST' }).catch(() => {});
+    ['vt_token','vt_username','vt_display','vt_role'].forEach(k => localStorage.removeItem(k));
+    window.location.href = 'login.html';
+}
+
+// ─────────────────────────────────────────────
+//  Theme
+// ─────────────────────────────────────────────
+let currentTheme = localStorage.getItem('vt_theme') || 'dark';
+
+function applyTheme(t) {
+    currentTheme = t;
+    document.documentElement.dataset.theme = t;
+    const icon = document.getElementById('theme-icon');
+    if (icon) icon.className = t === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+    localStorage.setItem('vt_theme', t);
+    updateChartTheme();
+}
+
+// ─────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────
 let chart = null;
 let flowChart = null;
 let isPlaying = false;
+let currentSourceType = 'video';
 
-// Generate or retrieve independent User Session ID
-let sessionId = sessionStorage.getItem('tracker_session_id');
-if (!sessionId) {
-    sessionId = 'sess_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36);
-    sessionStorage.setItem('tracker_session_id', sessionId);
-}
-
-// DOM Elements
-const connectionStatus = document.getElementById('connection-status');
-const videoStream = document.getElementById('video-stream');
-const streamPlaceholder = document.getElementById('stream-placeholder');
-const btnPlay = document.getElementById('btn-play');
-const btnPause = document.getElementById('btn-pause');
-const btnReset = document.getElementById('btn-reset');
-const btnLogout = document.getElementById('btn-logout');
-
-const modelSelect = document.getElementById('model-select');
-const datasetSelect = document.getElementById('dataset-select');
-const confSlider = document.getElementById('conf-slider');
-const confVal = document.getElementById('conf-val');
-const lineSlider = document.getElementById('line-slider');
-const lineVal = document.getElementById('line-val');
-
-const classCheckboxes = [
-    document.getElementById('class-person'),
-    document.getElementById('class-bicycle'),
-    document.getElementById('class-car'),
-    document.getElementById('class-motorcycle'),
-    document.getElementById('class-bus'),
-    document.getElementById('class-truck')
-];
-
-const tabVideo = document.getElementById('src-btn-video');
-const tabCam = document.getElementById('src-btn-cam');
-const tabImage = document.getElementById('src-btn-image');
-
-const videoUploadSection = document.getElementById('video-upload-section');
-const videoFileInput = document.getElementById('video-file-input');
-const selectedFileName = document.getElementById('selected-file-name');
-
-const imageUploadSection = document.getElementById('image-upload-section');
-const imageFileInput = document.getElementById('image-file-input');
-const selectedImageName = document.getElementById('selected-image-name');
-
-const statActive = document.getElementById('stat-active');
-const statCrossings = document.getElementById('stat-crossings');
-const statFps = document.getElementById('stat-fps');
-const eventLog = document.getElementById('event-log');
-
-// Initialization
+// ─────────────────────────────────────────────
+//  DOM Refs (gathered after DOMContentLoaded)
+// ─────────────────────────────────────────────
+let $;
 document.addEventListener('DOMContentLoaded', () => {
-    // Populate username display
-    const loggedUser = document.getElementById('logged-user-name');
-    if (loggedUser) {
-        loggedUser.innerText = localStorage.getItem('logged_user') || 'Admin';
+    $ = id => document.getElementById(id);
+
+    // Populate user info
+    $('logged-user-name').textContent = getDisplay();
+    const roleBadge = $('role-badge');
+    if (roleBadge) {
+        if (getRole() === 'admin') {
+            roleBadge.textContent = 'ADMIN';
+            roleBadge.style.cssText = 'background:rgba(139,92,246,0.2);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);border-radius:6px;padding:1px 6px;font-size:0.65rem;font-weight:700;margin-left:6px;';
+        }
     }
 
-    initChart();
+    // Apply theme
+    applyTheme(currentTheme);
+    $('btn-theme').addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+    $('btn-logout').addEventListener('click', logout);
+
+    // Init charts
+    initBarChart();
     initFlowChart();
+
+    // Load datasets from server
     loadDatasets();
-    connectWebSocket();
-    setupEventListeners();
-    syncConfig();
+
+    // WebSocket
+    connectWS();
+
+    // Control buttons
+    $('btn-play').addEventListener('click',  startStream);
+    $('btn-pause').addEventListener('click', pauseStream);
+    $('btn-reset').addEventListener('click', resetTracking);
+
+    // Sliders
+    $('conf-slider').addEventListener('input',  () => $('conf-val').textContent = parseFloat($('conf-slider').value).toFixed(2));
+    $('conf-slider').addEventListener('change', syncConfig);
+    $('line-slider').addEventListener('input',  () => $('line-val').textContent = `${$('line-slider').value}%`);
+    $('line-slider').addEventListener('change', syncConfig);
+
+    // Model / Dataset
+    $('model-select').addEventListener('change', syncConfig);
+    $('dataset-select').addEventListener('change', syncConfig);
+
+    // Class checkboxes
+    ['class-person','class-bicycle','class-car','class-motorcycle','class-bus','class-truck']
+        .forEach(id => $(id) && $(id).addEventListener('change', syncConfig));
+
+    // Source tabs
+    $('src-btn-video').addEventListener('click', () => setSource('video'));
+    $('src-btn-cam').addEventListener('click',   () => setSource('webcam'));
+    $('src-btn-image').addEventListener('click', () => setSource('image'));
+
+    // File inputs
+    $('video-file-input').addEventListener('change', () => {
+        if ($('video-file-input').files.length) {
+            $('selected-file-name').textContent = $('video-file-input').files[0].name;
+            uploadVideo($('video-file-input').files[0]);
+        }
+    });
+    $('image-file-input').addEventListener('change', () => {
+        if ($('image-file-input').files.length) {
+            $('selected-image-name').textContent = $('image-file-input').files[0].name;
+            uploadImage($('image-file-input').files[0]);
+        }
+    });
 });
 
-// Setup Chart 1: Bar Chart (Class crossings count)
-function initChart() {
-    const ctx = document.getElementById('analytics-chart').getContext('2d');
+// ─────────────────────────────────────────────
+//  Source Tab switching
+// ─────────────────────────────────────────────
+function setSource(type) {
+    currentSourceType = type;
+    ['video','cam','image'].forEach(t => {
+        const btn = document.getElementById(`src-btn-${t === 'cam' ? 'cam' : t}`);
+        if (btn) btn.classList.toggle('active', t === type || (type === 'webcam' && t === 'cam'));
+    });
+    // Fix: ensure each tab button properly activates
+    document.getElementById('src-btn-video').classList.toggle('active', type === 'video');
+    document.getElementById('src-btn-cam').classList.toggle('active',   type === 'webcam');
+    document.getElementById('src-btn-image').classList.toggle('active', type === 'image');
+
+    document.getElementById('video-upload-section').style.display = type === 'video'  ? 'block' : 'none';
+    document.getElementById('image-upload-section').style.display = type === 'image'  ? 'block' : 'none';
+
+    syncConfig();
+}
+
+// ─────────────────────────────────────────────
+//  Config Sync
+// ─────────────────────────────────────────────
+function getCheckedClasses() {
+    return ['class-person','class-bicycle','class-car','class-motorcycle','class-bus','class-truck']
+        .map(id => document.getElementById(id))
+        .filter(el => el && el.checked)
+        .map(el => parseInt(el.value));
+}
+
+function syncConfig() {
+    const token = getToken();
+    const config = {
+        model:              document.getElementById('model-select').value,
+        conf_threshold:     parseFloat(document.getElementById('conf-slider').value),
+        line_position_ratio: parseFloat(document.getElementById('line-slider').value) / 100,
+        classes:            getCheckedClasses(),
+        source_type:        currentSourceType,
+        video_file:         document.getElementById('dataset-select').value || ''
+    };
+    fetch(`/api/config?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status !== 'success') console.warn('Config sync failed', d);
+        else if (isPlaying) reloadStream();
+    })
+    .catch(e => console.error('syncConfig error', e));
+}
+
+// ─────────────────────────────────────────────
+//  Dataset Loader
+// ─────────────────────────────────────────────
+function loadDatasets() {
+    const token = getToken();
+    fetch(`/api/datasets?token=${token}`)
+    .then(r => r.json())
+    .then(d => {
+        const sel = document.getElementById('dataset-select');
+        sel.innerHTML = '';
+        if (d.datasets && d.datasets.length) {
+            d.datasets.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f; opt.textContent = f;
+                if (f === 'video.mp4') opt.selected = true;
+                sel.appendChild(opt);
+            });
+        } else {
+            sel.innerHTML = '<option value="">No video files found</option>';
+        }
+        syncConfig();
+    })
+    .catch(e => console.error('loadDatasets error', e));
+}
+
+// ─────────────────────────────────────────────
+//  Video Upload with XHR progress
+// ─────────────────────────────────────────────
+function uploadVideo(file) {
+    const token = getToken();
+    const fd = new FormData();
+    fd.append('file', file);
+
+    const progWrap = document.getElementById('upload-progress');
+    const progBar  = document.getElementById('upload-bar');
+    const progPct  = document.getElementById('upload-pct');
+    document.getElementById('selected-file-name').textContent = 'Uploading…';
+    progWrap.style.display = 'flex';
+    progBar.style.width = '0%';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/upload?token=${token}`);
+
+    xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            progBar.style.width = `${pct}%`;
+            progPct.textContent = `${pct}%`;
+        }
+    };
+
+    xhr.onload = () => {
+        progWrap.style.display = 'none';
+        try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.status === 'success') {
+                document.getElementById('selected-file-name').textContent = `✓ ${file.name}`;
+                loadDatasets();  // refresh dropdown
+                resetTracking();
+                setTimeout(startStream, 600);
+            } else {
+                document.getElementById('selected-file-name').textContent = 'Upload failed';
+                alert(`Upload error: ${data.message}`);
+            }
+        } catch { document.getElementById('selected-file-name').textContent = 'Upload error'; }
+    };
+
+    xhr.onerror = () => {
+        progWrap.style.display = 'none';
+        document.getElementById('selected-file-name').textContent = 'Network error';
+    };
+
+    xhr.send(fd);
+}
+
+// ─────────────────────────────────────────────
+//  Image Upload
+// ─────────────────────────────────────────────
+async function uploadImage(file) {
+    const token = getToken();
+    const fd = new FormData();
+    fd.append('file', file);
+    document.getElementById('selected-image-name').textContent = 'Uploading…';
+    try {
+        const res  = await fetch(`/api/upload_image?token=${token}`, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.status === 'success') {
+            document.getElementById('selected-image-name').textContent = `✓ ${file.name}`;
+            resetTracking();
+            setTimeout(startStream, 400);
+        } else {
+            document.getElementById('selected-image-name').textContent = 'Upload failed';
+            alert(`Upload error: ${data.message}`);
+        }
+    } catch (e) {
+        document.getElementById('selected-image-name').textContent = 'Network error';
+        console.error(e);
+    }
+}
+
+// ─────────────────────────────────────────────
+//  Stream Control
+// ─────────────────────────────────────────────
+function reloadStream() {
+    const token = getToken();
+    const ts = Date.now();
+    document.getElementById('video-stream').src = `/api/stream?token=${token}&_t=${ts}`;
+}
+
+async function startStream() {
+    if (isPlaying) return;
+    const token = getToken();
+    try {
+        const res  = await fetch(`/api/control?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'play' })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            isPlaying = true;
+            document.getElementById('btn-play').disabled  = true;
+            document.getElementById('btn-pause').disabled = false;
+            const vid = document.getElementById('video-stream');
+            vid.style.display = 'block';
+            document.getElementById('stream-placeholder').style.display = 'none';
+            reloadStream();
+        }
+    } catch (e) { console.error('startStream error', e); }
+}
+
+async function pauseStream() {
+    if (!isPlaying) return;
+    const token = getToken();
+    try {
+        const res = await fetch(`/api/control?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'pause' })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            isPlaying = false;
+            document.getElementById('btn-play').disabled  = false;
+            document.getElementById('btn-pause').disabled = true;
+            const vid = document.getElementById('video-stream');
+            vid.src = '';
+            vid.style.display = 'none';
+            document.getElementById('stream-placeholder').style.display = 'flex';
+        }
+    } catch (e) { console.error('pauseStream error', e); }
+}
+
+async function resetTracking() {
+    const token = getToken();
+    try {
+        await fetch(`/api/control?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reset' })
+        });
+    } catch (e) { console.error('resetTracking error', e); }
+    document.getElementById('stat-active').textContent    = '0';
+    document.getElementById('stat-crossings').textContent = '0';
+    document.getElementById('event-log').innerHTML = '<li class="empty-log">No events yet.</li>';
+    if (chart)     { chart.data.datasets[0].data = [0,0,0,0,0,0]; chart.update(); }
+    if (flowChart) {
+        flowChart.data.labels = [];
+        flowChart.data.datasets.forEach(ds => ds.data = []);
+        flowChart.update();
+    }
+}
+
+// ─────────────────────────────────────────────
+//  WebSocket
+// ─────────────────────────────────────────────
+let ws = null;
+
+function connectWS() {
+    const token = getToken();
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`);
+
+    ws.onopen = () => {
+        const el = document.getElementById('connection-status');
+        if (el) { el.className = 'status-badge connected'; el.innerHTML = '<span class="status-dot"></span> Online'; }
+    };
+    ws.onclose = () => {
+        const el = document.getElementById('connection-status');
+        if (el) { el.className = 'status-badge disconnected'; el.innerHTML = '<span class="status-dot"></span> Offline'; }
+        setTimeout(connectWS, 3000);
+    };
+    ws.onmessage = (e) => {
+        try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'stats')  updateStats(msg.data);
+            if (msg.type === 'event') addEventLog(msg.data);
+        } catch { }
+    };
+}
+
+// ─────────────────────────────────────────────
+//  Stats Update
+// ─────────────────────────────────────────────
+function updateStats(data) {
+    document.getElementById('stat-active').textContent    = data.active_count;
+    document.getElementById('stat-crossings').textContent = data.total_crossings;
+    document.getElementById('stat-fps').textContent       = (data.fps || 0).toFixed(1);
+
+    const viewers = document.getElementById('active-viewers');
+    if (viewers && data.active_viewers) viewers.textContent = data.active_viewers;
+
+    // Resource bars
+    setBar('cpu', data.cpu_usage);
+    setBar('ram', data.ram_usage);
+
+    // Bar chart (crossings by class)
+    if (chart) {
+        const classMap = { person:0, bicycle:1, car:2, motorcycle:3, bus:4, truck:5 };
+        const counts = [0,0,0,0,0,0];
+        for (const [cls, cnt] of Object.entries(data.crossings_by_class || {})) {
+            if (classMap[cls] !== undefined) counts[classMap[cls]] = cnt;
+        }
+        chart.data.datasets[0].data = counts;
+        chart.update('none');
+    }
+
+    // Flow chart
+    if (flowChart) {
+        const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        flowChart.data.labels.push(t);
+        flowChart.data.datasets[0].data.push(data.active_count);
+        flowChart.data.datasets[1].data.push(data.total_crossings);
+        if (flowChart.data.labels.length > 20) {
+            flowChart.data.labels.shift();
+            flowChart.data.datasets.forEach(ds => ds.shift());
+        }
+        flowChart.update('none');
+    }
+}
+
+function setBar(id, pct) {
+    const bar = document.getElementById(`${id}-bar`);
+    const val = document.getElementById(`${id}-val`);
+    if (!bar || !val || pct === undefined) return;
+    bar.style.width = `${pct}%`;
+    val.textContent = `${Math.round(pct)}%`;
+    bar.className   = 'progress-bar' + (pct > 85 ? ' danger' : pct > 60 ? ' warning' : '');
+}
+
+// ─────────────────────────────────────────────
+//  Event Log
+// ─────────────────────────────────────────────
+function addEventLog(ev) {
+    const log = document.getElementById('event-log');
+    const empty = log.querySelector('.empty-log');
+    if (empty) empty.remove();
+
+    const li = document.createElement('li');
+    li.className = ev.direction === 'down' ? 'cross-in' : 'cross-out';
+    li.innerHTML = `<span class="timestamp">[${ev.time}]</span>
+        <span><strong>${(ev.class||'').toUpperCase()} #${ev.id}</strong> crossed <em>${ev.direction}</em></span>`;
+    log.insertBefore(li, log.firstChild);
+    while (log.children.length > 40) log.removeChild(log.lastChild);
+}
+
+// ─────────────────────────────────────────────
+//  Charts
+// ─────────────────────────────────────────────
+function chartColors() {
+    const isDark = document.documentElement.dataset.theme !== 'light';
+    return { grid: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)', tick: isDark ? '#94a3b8' : '#64748b' };
+}
+
+function initBarChart() {
+    const ctx = document.getElementById('analytics-chart');
+    if (!ctx) return;
+    const { grid, tick } = chartColors();
     chart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Person', 'Bicycle', 'Car', 'Motorcycle', 'Bus', 'Truck'],
+            labels: ['Person','Bicycle','Car','Motorcycle','Bus','Truck'],
             datasets: [{
-                label: 'Total Crossings',
-                data: [0, 0, 0, 0, 0, 0],
-                backgroundColor: [
-                    'rgba(6, 182, 212, 0.6)',   // Cyan
-                    'rgba(139, 92, 246, 0.6)',  // Purple
-                    'rgba(16, 185, 129, 0.6)',  // Green
-                    'rgba(245, 158, 11, 0.6)',  // Orange
-                    'rgba(59, 130, 246, 0.6)',  // Blue
-                    'rgba(239, 68, 68, 0.6)'    // Red
-                ],
-                borderColor: [
-                    '#06b6d4',
-                    '#8b5cf6',
-                    '#10b981',
-                    '#f59e0b',
-                    '#3b82f6',
-                    '#ef4444'
-                ],
-                borderWidth: 1.5,
-                borderRadius: 4
+                label: 'Crossings',
+                data: [0,0,0,0,0,0],
+                backgroundColor: ['rgba(6,182,212,0.55)','rgba(139,92,246,0.55)','rgba(16,185,129,0.55)','rgba(245,158,11,0.55)','rgba(59,130,246,0.55)','rgba(239,68,68,0.55)'],
+                borderColor:     ['#06b6d4','#8b5cf6','#10b981','#f59e0b','#3b82f6','#ef4444'],
+                borderWidth: 1.5, borderRadius: 5
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: { legend: { display: false } },
             scales: {
-                y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: { color: '#9ca3af', font: { family: 'Outfit', size: 9 } }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#9ca3af', font: { family: 'Outfit', size: 9 } }
-                }
+                y: { grid: { color: grid }, ticks: { color: tick, font: { family: 'Outfit', size: 9 } } },
+                x: { grid: { display: false }, ticks: { color: tick, font: { family: 'Outfit', size: 9 } } }
             }
         }
     });
 }
 
-// Setup Chart 2: Line Chart (Flow over time)
 function initFlowChart() {
-    const ctx = document.getElementById('flow-chart').getContext('2d');
+    const ctx = document.getElementById('flow-chart');
+    if (!ctx) return;
+    const { grid, tick } = chartColors();
     flowChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: [],
             datasets: [
-                {
-                    label: 'Active Detections',
-                    data: [],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.05)',
-                    fill: true,
-                    tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: 1
-                },
-                {
-                    label: 'Line Crossings',
-                    data: [],
-                    borderColor: '#06b6d4',
-                    backgroundColor: 'rgba(6, 182, 212, 0.05)',
-                    fill: true,
-                    tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: 1
-                }
+                { label: 'Active', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.06)', fill: true, tension: 0.35, borderWidth: 2, pointRadius: 0 },
+                { label: 'Crossings', data: [], borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,0.06)', fill: true, tension: 0.35, borderWidth: 2, pointRadius: 0 }
             ]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: '#9ca3af', font: { family: 'Outfit', size: 10 } }
-                }
-            },
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: { legend: { labels: { color: tick, font: { family: 'Outfit', size: 10 }, boxWidth: 12 } } },
             scales: {
-                y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: { color: '#9ca3af', font: { family: 'Outfit', size: 9 } }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#9ca3af', font: { family: 'Outfit', size: 8 } }
-                }
+                y: { grid: { color: grid }, ticks: { color: tick, font: { family: 'Outfit', size: 9 } } },
+                x: { grid: { display: false }, ticks: { color: tick, font: { family: 'Outfit', size: 8 }, maxTicksLimit: 6 } }
             }
         }
     });
 }
 
-// Fetch list of available datasets from server
-function loadDatasets() {
-    fetch(`/api/datasets?session_id=${sessionId}`)
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success' && data.datasets) {
-            datasetSelect.innerHTML = '';
-            data.datasets.forEach(dataset => {
-                const opt = document.createElement('option');
-                opt.value = dataset;
-                opt.innerText = dataset;
-                // Set default video selection
-                if (dataset === 'video.mp4') {
-                    opt.selected = true;
-                }
-                datasetSelect.appendChild(opt);
-            });
-            syncConfig();
-        }
-    })
-    .catch(err => console.error('Error fetching datasets:', err));
-}
-
-// WebSocket Connection with Session ID
-function connectWebSocket() {
-    const loc = window.location;
-    let wsUri = loc.protocol === "https:" ? "wss:" : "ws:";
-    wsUri += `//${loc.host}/ws?session_id=${sessionId}`;
-
-    wsConnection = new WebSocket(wsUri);
-
-    wsConnection.onopen = () => {
-        connectionStatus.className = 'status-badge connected';
-        connectionStatus.innerHTML = '<span class="status-dot"></span> Online';
-    };
-
-    wsConnection.onclose = () => {
-        connectionStatus.className = 'status-badge disconnected';
-        connectionStatus.innerHTML = '<span class="status-dot"></span> Offline';
-        setTimeout(connectWebSocket, 3000); // Reconnect loop
-    };
-
-    wsConnection.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'stats') {
-            updateStats(msg.data);
-        } else if (msg.type === 'event') {
-            addEventLog(msg.data);
-        }
-    };
-}
-
-// Update Stats & Charts with Broadcast Telemetry
-function updateStats(data) {
-    statActive.innerText = data.active_count;
-    statCrossings.innerText = data.total_crossings;
-    statFps.innerText = data.fps.toFixed(1);
-
-    // Concurrent viewer count
-    if (data.active_viewers !== undefined) {
-        document.getElementById('active-viewers').innerText = data.active_viewers;
-    }
-
-    // CPU/RAM usage meters
-    if (data.cpu_usage !== undefined) {
-        document.getElementById('cpu-val').innerText = `${data.cpu_usage.toFixed(0)}%`;
-        const cpuBar = document.getElementById('cpu-bar');
-        cpuBar.style.width = `${data.cpu_usage}%`;
-        cpuBar.className = 'progress-bar' + (data.cpu_usage > 85 ? ' danger' : data.cpu_usage > 60 ? ' warning' : '');
-    }
-    if (data.ram_usage !== undefined) {
-        document.getElementById('ram-val').innerText = `${data.ram_usage.toFixed(0)}%`;
-        const ramBar = document.getElementById('ram-bar');
-        ramBar.style.width = `${data.ram_usage}%`;
-        ramBar.className = 'progress-bar' + (data.ram_usage > 85 ? ' danger' : data.ram_usage > 60 ? ' warning' : '');
-    }
-
-    // Update crossings bar chart
-    const classMapping = {
-        'person': 0, 'bicycle': 1, 'car': 2, 'motorcycle': 3, 'bus': 4, 'truck': 5
-    };
-    const counts = [0, 0, 0, 0, 0, 0];
-    for (const [cls, count] of Object.entries(data.crossings_by_class)) {
-        if (classMapping[cls] !== undefined) {
-            counts[classMapping[cls]] = count;
-        }
-    }
-    chart.data.datasets[0].data = counts;
-    chart.update();
-
-    // Update flow line chart over time
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    flowChart.data.labels.push(timeStr);
-    flowChart.data.datasets[0].data.push(data.active_count);
-    flowChart.data.datasets[1].data.push(data.total_crossings);
-
-    // Retain only the last 15 points
-    if (flowChart.data.labels.length > 15) {
-        flowChart.data.labels.shift();
-        flowChart.data.datasets[0].data.shift();
-        flowChart.data.datasets[1].data.shift();
-    }
-    flowChart.update();
-}
-
-// Add Crossing Log
-function addEventLog(eventData) {
-    const emptyLog = eventLog.querySelector('.empty-log');
-    if (emptyLog) {
-        eventLog.removeChild(emptyLog);
-    }
-
-    const li = document.createElement('li');
-    const directionClass = eventData.direction === 'in' || eventData.direction === 'down' ? 'cross-in' : 'cross-out';
-    li.className = directionClass;
-
-    const timestamp = document.createElement('span');
-    timestamp.className = 'timestamp';
-    timestamp.innerText = `[${eventData.time}]`;
-
-    const details = document.createElement('span');
-    details.innerHTML = `<span class="highlight">${eventData.class.toUpperCase()} (ID:${eventData.id})</span> crossed line moving <span class="highlight">${eventData.direction}</span>`;
-
-    li.appendChild(timestamp);
-    li.appendChild(details);
-
-    eventLog.insertBefore(li, eventLog.firstChild);
-
-    while (eventLog.children.length > 30) {
-        eventLog.removeChild(eventLog.lastChild);
-    }
-}
-
-// Sync session configuration with server
-function syncConfig() {
-    let source = 'video';
-    if (tabCam.classList.contains('active')) {
-        source = 'webcam';
-    } else if (tabImage.classList.contains('active')) {
-        source = 'image';
-    }
-
-    const config = {
-        model: modelSelect.value,
-        conf_threshold: parseFloat(confSlider.value),
-        line_position_ratio: parseFloat(lineSlider.value) / 100,
-        classes: classCheckboxes.filter(cb => cb.checked).map(cb => parseInt(cb.value)),
-        source_type: source,
-        video_file: datasetSelect.value || 'video.mp4'
-    };
-
-    fetch(`/api/config?session_id=${sessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status !== 'success') {
-            console.error('Config synchronization failed', data);
-        } else if (isPlaying) {
-            // Force stream reload to sync settings instantly
-            const timestamp = new Date().getTime();
-            videoStream.src = `/api/stream?session_id=${sessionId}&t=${timestamp}`;
-        }
-    })
-    .catch(err => console.error('Error syncing config:', err));
-}
-
-// Setup Event Listeners
-function setupEventListeners() {
-    confSlider.addEventListener('input', () => {
-        confVal.innerText = parseFloat(confSlider.value).toFixed(2);
+function updateChartTheme() {
+    if (!chart && !flowChart) return;
+    const { grid, tick } = chartColors();
+    [chart, flowChart].forEach(c => {
+        if (!c) return;
+        c.options.scales.x.ticks.color = tick;
+        c.options.scales.y.ticks.color = tick;
+        c.options.scales.y.grid.color  = grid;
+        if (c.options.plugins?.legend?.labels) c.options.plugins.legend.labels.color = tick;
+        c.update();
     });
-    confSlider.addEventListener('change', syncConfig);
-
-    lineSlider.addEventListener('input', () => {
-        lineVal.innerText = `${lineSlider.value}%`;
-    });
-    lineSlider.addEventListener('change', syncConfig);
-
-    modelSelect.addEventListener('change', syncConfig);
-    datasetSelect.addEventListener('change', syncConfig);
-
-    classCheckboxes.forEach(cb => {
-        cb.addEventListener('change', syncConfig);
-    });
-
-    // Logout Command
-    if (btnLogout) {
-        btnLogout.addEventListener('click', () => {
-            localStorage.removeItem('is_logged_in');
-            localStorage.removeItem('logged_user');
-            window.location.href = 'login.html';
-        });
-    }
-
-    // Input Tabs Configuration
-    tabVideo.addEventListener('click', () => {
-        tabVideo.classList.add('active');
-        tabCam.classList.remove('active');
-        tabImage.classList.remove('active');
-        videoUploadSection.style.display = 'block';
-        imageUploadSection.style.display = 'none';
-        syncConfig();
-    });
-
-    tabCam.addEventListener('click', () => {
-        tabCam.classList.add('active');
-        tabVideo.classList.remove('active');
-        tabImage.classList.remove('active');
-        videoUploadSection.style.display = 'none';
-        imageUploadSection.style.display = 'none';
-        syncConfig();
-    });
-
-    tabImage.addEventListener('click', () => {
-        tabImage.classList.add('active');
-        tabVideo.classList.remove('active');
-        tabCam.classList.remove('active');
-        videoUploadSection.style.display = 'none';
-        imageUploadSection.style.display = 'block';
-        syncConfig();
-    });
-
-    // Custom Video File selection
-    videoFileInput.addEventListener('change', () => {
-        if (videoFileInput.files.length > 0) {
-            const file = videoFileInput.files[0];
-            selectedFileName.innerText = file.name;
-            uploadVideoFile(file);
-        }
-    });
-
-    // Custom Image File selection
-    imageFileInput.addEventListener('change', () => {
-        if (imageFileInput.files.length > 0) {
-            const file = imageFileInput.files[0];
-            selectedImageName.innerText = file.name;
-            uploadImageFile(file);
-        }
-    });
-
-    btnPlay.addEventListener('click', startStream);
-    btnPause.addEventListener('click', pauseStream);
-    btnReset.addEventListener('click', resetTracking);
-}
-
-// Upload custom video for this user session
-function uploadVideoFile(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    selectedFileName.innerText = "Uploading...";
-    fetch(`/api/upload?session_id=${sessionId}`, {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            selectedFileName.innerText = `Uploaded: ${file.name}`;
-            
-            // Re-fetch dataset list to populate dropdown with the newly uploaded dataset
-            fetch(`/api/datasets?session_id=${sessionId}`)
-            .then(res => res.json())
-            .then(datasetData => {
-                if (datasetData.status === 'success') {
-                    datasetSelect.innerHTML = '';
-                    datasetData.datasets.forEach(dataset => {
-                        const opt = document.createElement('option');
-                        opt.value = dataset;
-                        opt.innerText = dataset;
-                        if (dataset === data.filename) {
-                            opt.selected = true;
-                        }
-                        datasetSelect.appendChild(opt);
-                    });
-                    resetTracking();
-                    
-                    // Automatically trigger stream play
-                    setTimeout(startStream, 500);
-                }
-            });
-        } else {
-            selectedFileName.innerText = "Upload failed";
-            alert(`Error: ${data.message}`);
-        }
-    })
-    .catch(err => {
-        selectedFileName.innerText = "Upload error";
-        console.error('Error uploading video:', err);
-    });
-}
-
-// Upload custom image for static analysis
-function uploadImageFile(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    selectedImageName.innerText = "Uploading...";
-    fetch(`/api/upload_image?session_id=${sessionId}`, {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            selectedImageName.innerText = `Uploaded: ${file.name}`;
-            resetTracking();
-            
-            // Automatically play static image stream
-            setTimeout(startStream, 500);
-        } else {
-            selectedImageName.innerText = "Upload failed";
-            alert(`Error: ${data.message}`);
-        }
-    })
-    .catch(err => {
-        selectedImageName.innerText = "Upload error";
-        console.error('Error uploading image:', err);
-    });
-}
-
-// Play Stream actions
-function startStream() {
-    if (isPlaying) return;
-
-    fetch(`/api/control?session_id=${sessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'play' })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            isPlaying = true;
-            btnPlay.disabled = true;
-            btnPause.disabled = false;
-            
-            const timestamp = new Date().getTime();
-            videoStream.src = `/api/stream?session_id=${sessionId}&t=${timestamp}`;
-            videoStream.style.display = 'block';
-            streamPlaceholder.style.display = 'none';
-        }
-    })
-    .catch(err => console.error('Error starting stream:', err));
-}
-
-// Pause Stream actions
-function pauseStream() {
-    if (!isPlaying) return;
-
-    fetch(`/api/control?session_id=${sessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'pause' })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            isPlaying = false;
-            btnPlay.disabled = false;
-            btnPause.disabled = true;
-            
-            videoStream.src = '';
-            videoStream.style.display = 'none';
-            streamPlaceholder.style.display = 'flex';
-        }
-    })
-    .catch(err => console.error('Error pausing stream:', err));
-}
-
-// Reset tracking stats
-function resetTracking() {
-    fetch(`/api/control?session_id=${sessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reset' })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            statActive.innerText = '0';
-            statCrossings.innerText = '0';
-            eventLog.innerHTML = '<li class="empty-log">No events recorded yet.</li>';
-            
-            chart.data.datasets[0].data = [0, 0, 0, 0, 0, 0];
-            chart.update();
-
-            flowChart.data.labels = [];
-            flowChart.data.datasets[0].data = [];
-            flowChart.data.datasets[1].data = [];
-            flowChart.update();
-        }
-    })
-    .catch(err => console.error('Error resetting stream:', err));
 }
