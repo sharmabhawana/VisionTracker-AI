@@ -9,7 +9,15 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from ultralytics import YOLO
+try:
+    from ultralytics import YOLO
+except ImportError:
+    import subprocess
+    import sys
+    print("Ultralytics not found. Installing dependencies...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "ultralytics", "lap"])
+    from ultralytics import YOLO
+
 
 app = FastAPI(title="VisionTracker AI Backend")
 

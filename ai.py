@@ -4,7 +4,15 @@
 # 2. Run: python ai.py (Press 'q' to quit the display window)
 
 import cv2
-from ultralytics import YOLO
+try:
+    from ultralytics import YOLO
+except ImportError:
+    import subprocess
+    import sys
+    print("Ultralytics not found. Installing dependencies...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "ultralytics", "lap"])
+    from ultralytics import YOLO
+
 
 # Load model
 model = YOLO('yolov8n.pt')

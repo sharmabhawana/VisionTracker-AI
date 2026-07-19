@@ -2,5 +2,6 @@ fastapi
 uvicorn[standard]
 opencv-python
 ultralytics
+lap
 python-multipart
 jinja2
